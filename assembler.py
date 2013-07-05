@@ -1,9 +1,14 @@
 import irclib.session as session
 import irclib.connection as connection
 import irclib.dcc as dcc
+import irclib.utils as utils
 from models import Channel, Bot, Pack
 import peewee
 import re
+import io
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 
 class Assembler(object):
@@ -19,6 +24,9 @@ class Assembler(object):
     def __init__(self, server, port):
         self.__server = server
         self.__port = port
+        session.register(self.debug_print)
+        session.register(self.handle_dcc)
+        session.register(self.dcc_complete)
 
     def irc_connect(self, nick):
         self._session = session.Session()
@@ -60,11 +68,50 @@ class Assembler(object):
                             size=size,
                             name=name)
 
-    @session.register
+    #@session.register
+    @session.filters.events('dcc_complete')
+    def dcc_complete(self, event):
+        print 'DCC complete from ' + event.source
+        fileobj = event.server.fileobj
+        fileobj.seek(0)
+        data = fileobj.read()
+        self.stored = data
+        fileobj.close()
+        #self.parse_packlist(fileobj.read())
+
+
+
+    #@session.register
+    @session.filters.events('ctcp')
+    def handle_dcc(self, event):
+        print 'CTCP ' + event.ctcp + ' from ' + event.nickname.name + ': ' + event.message
+        if event.ctcp == 'DCC':
+            params = event.message.split()
+            ip = utils.ip_quad_to_numstr(int(params[-3]))
+            port = int(params[-2])
+            size = int(params[-1])
+            dccfile = io.BytesIO()
+
+            conn = self._session.dcc('send', (dccfile, size))
+            conn.connect(ip, port)
+
+
+    #@session.register
     #@session.filters.events('text')
-    #@session.filters.match(r'hello')
-    def handle_ctcp(event):
-        print event.nickname.name + " " + event.channel + " " + event.message
+    def debug_print(self, event):
+        if event.command == 'raw':
+            return
+        n = u''
+        if event.nickname:
+            n = event.nickname.name
+        print event.command + u"> " + n + u": " + (event.channel or u'') + ": " + (event.message or u'NOMSG')
+        #if event.nickname:
+        #    print event.nickname.name + u" ",
+        #if event.channel:
+        #    print event.channel + u" ",
+        #if event.message:
+        #    print event.message
+        #print event.nickname.name + u" " + event.channel + u" " + event.message
 
 
 
