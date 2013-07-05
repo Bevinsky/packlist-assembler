@@ -21,8 +21,9 @@ class Assembler(object):
         self.__port = port
 
     def irc_connect(self, nick):
-        #TODO
-        pass
+        self._session = session.Session()
+        self._irc = self._session.server()
+        self._irc.connect(self.__server, self.__port, nick)
 
     def add_bot(self, channel, name):
         channel = channel.lower()
@@ -58,6 +59,12 @@ class Assembler(object):
                             count=count,
                             size=size,
                             name=name)
+
+    @session.register
+    #@session.filters.events('text')
+    #@session.filters.match(r'hello')
+    def handle_ctcp(event):
+        print event.nickname.name + " " + event.channel + " " + event.message
 
 
 
